@@ -2,9 +2,9 @@ mod host;
 
 use axum::{Router, extract::ConnectInfo, response::Html, routing::get};
 
+use axum::Json;
 use http::{HeaderValue, header};
 use serde_json::{Value, json};
-use axum::Json;
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
 use std::net::SocketAddr;
@@ -13,7 +13,7 @@ use askama::Template;
 
 use rand::prelude::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use axum_anyhow::ApiResult;
 
 #[derive(Template)]
@@ -157,12 +157,13 @@ const MOTD: &'static [&'static str] = &[
     "i also have to look up song lyrics",
     "take backwards crowbar of the right",
     "how to use git tutorial 2026 working",
+    "ava",
 ];
 
 fn motd() -> Result<&'static str> {
     match MOTD.iter().choose(&mut rand::rng()) {
         Some(m) => Ok(m),
-        None => Err(anyhow!("failed to choose motd"))
+        None => Err(anyhow!("failed to choose motd")),
     }
 }
 
