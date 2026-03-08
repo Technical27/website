@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/terminal.css">
+    <link rel="stylesheet" href="/static/test.css">
+    <title>aamaruvi's website: {{ title }}</title>
+  </head>
+  <body>
+    <h1>Hi, welcome to my website</h1>
+    <h2>Some quick areas</h2>
+    <ul>
+      <li><a href="/about">About</a> - find out more about me!</li>
+    </ul>
+    <h2>Cool showcases</h2>
+    <ul>
+      <li><a href="/art">Art - Mood Space</a></li>
+      <li><a href="/car">Car - Parking Lot</a></li>
+    </ul>
+    <h2>Fun little things</h2>
+    <ul>
+      {% if source.is_ipv6() %}
+      <li>
+      you are connected over IPv6 and participating in the transition away from a fundamentally broken internet
+      </li>
+      {% endif %}
+    </ul>
+  </body>
+</html>
