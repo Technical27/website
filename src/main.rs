@@ -3,6 +3,8 @@ mod host;
 use axum::{Router, extract::ConnectInfo, response::Html, routing::get};
 
 use http::{HeaderValue, header};
+use serde_json::{Value, json};
+use axum::Json;
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
 use std::net::SocketAddr;
@@ -10,6 +12,9 @@ use std::net::SocketAddr;
 use askama::Template;
 
 use rand::prelude::*;
+
+use anyhow::{anyhow, Result};
+use axum_anyhow::ApiResult;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -20,12 +25,17 @@ struct RootTemplate<'a> {
 
 #[derive(Template)]
 #[template(path = "about.html")]
-struct AboutTemplate;
+struct AboutTemplate<'a> {
+    title: &'a str,
+}
 
 #[derive(Template)]
 #[template(path = "art.html")]
-struct ArtTemplate;
+struct ArtTemplate<'a> {
+    title: &'a str,
+}
 
+// TODO: move this out of main
 const MOTD: &'static [&'static str] = &[
     "0x41414141",
     "48/00/1980",
@@ -139,52 +149,80 @@ const MOTD: &'static [&'static str] = &[
     "4US",
     "KWebsiteTitle",
     "Kandalf",
-    "KDE is amazing"
+    "KDE is amazing",
+    "Sway rocks",
+    "Gentoo",
+    "eselect news read",
+    "cargo run --release",
+    "i also have to look up song lyrics",
+    "take backwards crowbar of the right",
+    "how to use git tutorial 2026 working",
 ];
 
-fn motd() -> &'static str {
-    MOTD.iter().choose(&mut rand::rng()).unwrap()
+fn motd() -> Result<&'static str> {
+    match MOTD.iter().choose(&mut rand::rng()) {
+        Some(m) => Ok(m),
+        None => Err(anyhow!("failed to choose motd"))
+    }
 }
 
-async fn root(connection: ConnectInfo<SocketAddr>) -> Html<String> {
+async fn root(connection: ConnectInfo<SocketAddr>) -> ApiResult<Html<String>> {
     let root_template = RootTemplate {
-        title: &motd(),
+        title: &motd()?,
         source: &connection,
     };
-    Html(root_template.render().unwrap())
+    Ok(Html(root_template.render()?))
 }
 
-async fn about() -> Html<String> {
-    Html(AboutTemplate.render().unwrap())
+async fn about() -> ApiResult<Html<String>> {
+    let about_template = AboutTemplate { title: &motd()? };
+    Ok(Html(about_template.render()?))
 }
 
-async fn art() -> Html<String> {
-    Html(ArtTemplate.render().unwrap())
+async fn art() -> ApiResult<Html<String>> {
+    let art_template = ArtTemplate { title: &motd()? };
+    Ok(Html(art_template.render()?))
 }
 
-async fn car() -> &'static str {
-    "under construction, just use the back button"
+async fn car() -> ApiResult<String> {
+    Ok(motd()?.to_owned() + "\nunder construction, just use the back button")
+}
+
+async fn matrix_client() -> Json<Value> {
+    Json(json!({ "m.homeserver": { "base_url": "https://matrix.aamaruvi.com" } }))
+}
+
+async fn matrix_server() -> Json<Value> {
+    Json(json!({ "m.server": "matrix.aamaruvi.com:443" }))
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     let app = Router::new()
         .route("/", get(root))
         .route("/about", get(about))
         .route("/art", get(art))
         .route("/car", get(car))
+        .route("/.well-known/matrix/client", get(matrix_client))
+        .route("/.well-known/matrix/server", get(matrix_server))
         .nest_service("/static", ServeDir::new("static"))
-        .layer(host::HostCheckLayer::new())
+        .nest_service("/.well-known", ServeDir::new(".well-known"))
+        // Set no-cache due to many dyanmic things on all parts of the website
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-cache"),
-        ));
+        ))
+        // Internally sets no-store
+        .layer(host::HostCheckLayer::new());
 
-    let listener = tokio::net::TcpListener::bind("[::]:3000").await.unwrap();
+    // TODO: don't hardcode this
+    let listener = tokio::net::TcpListener::bind("[::]:14367").await?;
+
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .await
-    .unwrap();
+    .await?;
+
+    Ok(())
 }

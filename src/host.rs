@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::task::{Poll, Context};
 use std::time::{Duration, Instant};
 
 use pin_project::pin_project;
 
 use axum::{body::Body, response::IntoResponse};
 
-use http::{HeaderValue, Request, Response, header};
+use http::{HeaderValue, Request, Response, StatusCode, header};
 
 use tower::util::Oneshot;
 use tower::{Layer, Service};
@@ -41,12 +42,48 @@ impl<S> HostCheck<S> {
     pub fn new(inner: S, files: Vec<PathBuf>, time: TimeSync) -> Self {
         Self { inner, files, time }
     }
+
+    fn do_jail<F>(&self, req: Request<Body>) -> ResponseFuture<F> {
+        let len = self.files.len();
+
+        // attempting to chose a random with a range from 0 to 0 panics so early return
+        if len == 0 {
+            return ResponseFuture::new_deny_text();
+        }
+        
+        // lock the mutex to access the last index change instant, then determine if a new file
+        // should be used for the jail
+        {
+            let cur = Instant::now();
+            let mut last_change = match self.time.last_change.lock() {
+                Ok(l) => l,
+                // TODO: if the mutex is poisoned deal with this correctly
+                Err(_) => return ResponseFuture::new_deny_text()
+            };
+
+            if *last_change + Duration::from_secs(30) < cur {
+                let mut rng = rand::rng();
+                *last_change = cur;
+                self.time
+                    .cur_file
+                    .store(rng.random_range(..len), Ordering::SeqCst);
+            }
+        }
+
+        let path = match self.files.get(self.time.cur_file.load(Ordering::SeqCst)) {
+            Some(p) => p,
+            None => return ResponseFuture::new_deny_text(),
+        };
+
+        ResponseFuture::new_deny_file(path, req)
+    }
 }
 
 #[pin_project(project = KindProj)]
 enum Kind<F> {
     Normal(#[pin] F),
     DenyFile(#[pin] Oneshot<ServeFile, Request<Body>>),
+    DenyText,
     Deny,
 }
 
@@ -69,6 +106,10 @@ impl<F> ResponseFuture<F> {
         }
     }
 
+    pub fn new_deny_text() -> Self {
+        Self { inner: Kind::DenyText }
+    }
+
     pub fn new_deny() -> Self {
         Self { inner: Kind::Deny }
     }
@@ -82,16 +123,16 @@ where
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
+        cx: &mut Context<'_>,
+    ) -> Poll<Self::Output> {
         match self.project().inner.project() {
             KindProj::Normal(fut) => fut.poll(cx),
             KindProj::DenyFile(file) => file.poll(cx).map(|f| {
                 let mut res = f
-                    .expect("ServeFile should not return an error")
+                    .expect("ServeFile should not error, it is infallible, please check")
                     .into_response();
 
-                // serve files assumes all the text is ascii, but thats very old and no fun, so fix
+                // ServeFile assumes all the text is ascii, but thats very old and no fun, so fix
                 // all text/plain responses to correctly set the charset to utf-8
                 if let Some(ct) = res.headers().get(header::CONTENT_TYPE) {
                     if ct == "text/plain" {
@@ -102,10 +143,16 @@ where
                     }
                 }
 
+                res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+
                 return Ok(res);
             }),
+            KindProj::DenyText => {
+                Poll::Ready(Ok(Response::new("rm -rf --no-preserve root /".into())))
+            }
             KindProj::Deny => {
-                std::task::Poll::Ready(Ok(Response::new("rm -rf --no-preserve root /".into())))
+                let res = Response::builder().status(StatusCode::IM_A_TEAPOT).body("I'm a Teapot!".into()).expect("hard coded http response fail");
+                Poll::Ready(Ok(res))
             }
         }
     }
@@ -121,33 +168,24 @@ where
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         if let Some(host) = req.headers().get(header::HOST) {
-            if host == "localhost:3000" {
-                if req.uri() == "/favicon.ico" {
+            let path = req.uri().path();
+
+            if host.as_bytes()[..12] == *"aamaruvi.com".as_bytes() {
+                if path == "/favicon.ico" {
                     return ResponseFuture::new_deny();
                 }
 
-                {
-                    let cur = Instant::now();
-                    let mut last_change = self.time.last_change.lock().unwrap();
-
-                    if *last_change + Duration::from_secs(10) < cur {
-                        println!("time change");
-                        let mut rng = rand::rng();
-                        let len = self.files.len();
-                        *last_change = cur;
-                        self.time
-                            .cur_file
-                            .store(rng.random_range(..len), Ordering::SeqCst);
-                    }
+                // skip over well-known because bots are supposed to read this one
+                if !path.starts_with("/.well-known") {
+                    return self.do_jail(req);
                 }
-
-                let path = match self.files.get(self.time.cur_file.load(Ordering::SeqCst)) {
-                    Some(p) => p,
-                    None => return ResponseFuture::new_deny(),
-                };
-
-                return ResponseFuture::new_deny_file(path, req);
             }
+        }
+
+        // TODO: Seperate this out when the random file part gets sent into its own service, this
+        // needs to be in the main axum router instead of hardcoded here
+        if req.uri() == "/jail" {
+            return self.do_jail(req);
         }
 
         ResponseFuture::new_normal(self.inner.call(req))
@@ -155,8 +193,8 @@ where
 
     fn poll_ready(
         &mut self,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 }
@@ -164,13 +202,25 @@ where
 #[derive(Clone)]
 pub struct HostCheckLayer {
     time: TimeSync,
+    files: Vec<PathBuf>
 }
 
 impl HostCheckLayer {
     pub fn new() -> Self {
-        Self {
+        let this = Self {
             time: TimeSync::new(),
+            files: Self::read_dir().unwrap_or_default()
+        };
+
+        // manuall run the rng once, this instance is cloned across and the server should start
+        // with a random file at first, if there was no files found, then HostCheck will fall back
+        // to default text, check len manually because random will panic with a range of 0 to 0
+        let len = this.files.len();
+        if len != 0 {
+            this.time.cur_file.store(rand::rng().random_range(..len), Ordering::SeqCst);
         }
+
+        this
     }
 
     fn read_dir() -> std::io::Result<Vec<PathBuf>> {
@@ -184,6 +234,6 @@ impl<S> Layer<S> for HostCheckLayer {
     type Service = HostCheck<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        HostCheck::new(inner, Self::read_dir().unwrap(), self.time.clone())
+        HostCheck::new(inner, self.files.clone(), self.time.clone())
     }
 }
