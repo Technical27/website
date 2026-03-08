@@ -158,6 +158,7 @@ const MOTD: &'static [&'static str] = &[
     "take backwards crowbar of the right",
     "how to use git tutorial 2026 working",
     "ava",
+    "TheLegend27",
 ];
 
 fn motd() -> Result<&'static str> {

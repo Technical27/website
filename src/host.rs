@@ -216,7 +216,7 @@ impl HostCheckLayer {
             files: Self::read_dir().unwrap_or_default(),
         };
 
-        // manuall run the rng once, this instance is cloned across and the server should start
+        // manually run the rng once, this instance is cloned across and the server should start
         // with a random file at first, if there was no files found, then HostCheck will fall back
         // to default text, check len manually because random will panic with a range of 0 to 0
         let len = this.files.len();
