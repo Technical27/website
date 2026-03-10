@@ -159,6 +159,43 @@ const MOTD: &'static [&'static str] = &[
     "how to use git tutorial 2026 working",
     "ava",
     "TheLegend27",
+    "rating up! +0.000",
+    "the best ragebait is vivid/stasis",
+    "255/35R18",
+    "hi bramble",
+    "HTCPCP",
+    "HTCPCP-TEA",
+    "quabubu",
+    "beepo",
+    "LETS GO GAMBLING",
+    "99% of gamblers quit before the god run",
+    "what if jfk shot back",
+    "judge judy and executioner",
+    "women🔥",
+    "crazy, i was crazy once",
+    "they locked me in a room",
+    "a rubber room with rats",
+    "the rats made me crazy",
+    "quazy, i was quazy once",
+    "they locked me in a room",
+    "a room with quaverlings",
+    "the quaverlings made me quazy",
+    "Quaver",
+    "Beat",
+    "Treble",
+    "Clef",
+    "SOI SOI SOI SOI",
+    "nyancat",
+    "man this audio is shit",
+    "six seven",
+    "im a dog meow meow",
+    "🧲",
+    "painting with dirt",
+    "c418 - sweden",
+    "Battle Tapes",
+    "the world doesn't care",
+    "carbon fiber towels",
+    "LIQUIMOLY",
 ];
 
 fn motd() -> Result<&'static str> {
@@ -190,10 +227,13 @@ async fn car() -> ApiResult<String> {
     Ok(motd()?.to_owned() + "\nunder construction, just use the back button")
 }
 
+
+// returns information about the matrix homeserver to any client
 async fn matrix_client() -> Json<Value> {
     Json(json!({ "m.homeserver": { "base_url": "https://matrix.aamaruvi.com" } }))
 }
 
+// returns the matrix homeserver to any other homeserver to federate
 async fn matrix_server() -> Json<Value> {
     Json(json!({ "m.server": "matrix.aamaruvi.com:443" }))
 }

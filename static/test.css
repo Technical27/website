@@ -1,7 +1,32 @@
 body {
   margin: 0 auto;
-  width: 1024px;
+  padding: 0 1em;
+  /* width: 1024px; */
   /* display: flex; */
   /* flex-direction: column; */
   /* align-items: center; */
+}
+
+@media (max-width: 300px) {
+  body {
+    width: 250px
+  }
+}
+
+@media (min-width: 400px) and (max-width: 600px) {
+  body {
+    width: 350px
+  }
+}
+
+@media (min-width: 600px) and (max-width: 1024px) {
+  body {
+    width: 500px
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    width: 1024px
+  }
 }

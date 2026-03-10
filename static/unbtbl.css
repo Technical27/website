@@ -45,6 +45,12 @@ body {
   padding: 0;
 }
 
+@media (max-width: 600px) {
+  :root {
+    --font-size: 2rem;
+  }
+}
+
 h1 {
   font-size: calc(var(--font-size) * 1.45);
   letter-spacing: 0;
