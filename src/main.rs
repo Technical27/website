@@ -16,6 +16,9 @@ use rand::prelude::*;
 use anyhow::{Result, anyhow};
 use axum_anyhow::ApiResult;
 
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
+
 #[derive(Template)]
 #[template(path = "index.html")]
 struct RootTemplate<'a> {
@@ -227,7 +230,6 @@ async fn car() -> ApiResult<String> {
     Ok(motd()?.to_owned() + "\nunder construction, just use the back button")
 }
 
-
 // returns information about the matrix homeserver to any client
 async fn matrix_client() -> Json<Value> {
     Json(json!({ "m.homeserver": { "base_url": "https://matrix.aamaruvi.com" } }))
@@ -240,6 +242,11 @@ async fn matrix_server() -> Json<Value> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)?;
+
     let app = Router::new()
         .route("/", get(root))
         .route("/about", get(about))

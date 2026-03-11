@@ -14,6 +14,8 @@ use tower::util::Oneshot;
 use tower::{Layer, Service};
 use tower_http::services::ServeFile;
 
+use tracing::{info, trace};
+
 use rand::prelude::*;
 
 #[derive(Clone)]
@@ -131,19 +133,26 @@ where
                     .expect("ServeFile should not error, it is infallible, please check")
                     .into_response();
 
+                let headers = res.headers_mut();
+
                 // ServeFile assumes all the text is ascii, but thats very old and no fun, so fix
                 // all text/plain responses to correctly set the charset to utf-8
-                if let Some(ct) = res.headers().get(header::CONTENT_TYPE) {
+                if let Some(ct) = headers.get(header::CONTENT_TYPE) {
                     if ct == "text/plain" {
-                        res.headers_mut().insert(
+                        headers.insert(
                             header::CONTENT_TYPE,
                             HeaderValue::from_static("text/plain; charset=utf-8"),
                         );
                     }
                 }
 
-                res.headers_mut()
-                    .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                // don't let the browser store any response to avoid weird behavior
+                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                // tell to display inline, hopefully fixes videos to properly play
+                headers.insert(
+                    header::CONTENT_DISPOSITION,
+                    HeaderValue::from_static("inline"),
+                );
 
                 return Ok(res);
             }),
@@ -173,26 +182,47 @@ where
         let path = req.uri().path();
 
         if path == "/favicon.ico" {
+            trace!("favicon.ico, discarding");
             return ResponseFuture::new_deny();
         }
 
         // TODO: Seperate this out when the random file part gets sent into its own service, this
         // needs to be in the main axum router instead of hardcoded here
         if path == "/jail" {
+            trace!("intended jail link, sending jail response");
             return self.do_jail(req);
         }
 
         if let Some(host) = req.headers().get(header::HOST) {
-            if !host
-                .to_str()
-                .unwrap_or_default()
-                .starts_with("aamaruvi.com")
-            {
+            let host = host.to_str().unwrap_or_default();
+
+            if !host.starts_with("aamaruvi.com") {
                 // skip over well-known because bots are supposed to read this one
                 if !path.starts_with("/.well-known") {
+                    trace!("jail hit for path {}, host {}", path, host);
                     return self.do_jail(req);
                 }
             }
+        }
+
+        // nice try but this isn't wordpress
+        if path.starts_with("/wp-admin") || path.starts_with("/wp-includes") || path.ends_with(".php") {
+            trace!("jail hit for wordpress requests path {}", path);
+            return self.do_jail(req);
+        }
+
+        // TODO: don't hardcode this
+        if !path.starts_with("/static")
+            && path != "/car"
+            && path != "/"
+            && path != "/art"
+            && path != "/about"
+            && path != "/.well-known/matrix/client"
+            && path != "/.well-known/matrix/server"
+        {
+            info!("strange path request: {}", path);
+        } else {
+            trace!("path request: {}", path);
         }
 
         ResponseFuture::new_normal(self.inner.call(req))
@@ -221,6 +251,7 @@ impl HostCheckLayer {
         // to default text, check len manually because random will panic with a range of 0 to 0
         let len = this.files.len();
         if len != 0 {
+            trace!("initializing first file");
             this.time
                 .cur_file
                 .store(rand::rng().random_range(..len), Ordering::SeqCst);
