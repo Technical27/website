@@ -1,22 +1,24 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
+use std::task::{Context as Cx, Poll};
 use std::time::{Duration, Instant};
 
 use pin_project::pin_project;
 
-use axum::{body::Body, response::IntoResponse};
+use axum::body::Body;
 
-use http::{HeaderValue, Request, Response, StatusCode, header};
+use http::{Request, Response, header};
 
-use tower::util::Oneshot;
 use tower::{Layer, Service};
-use tower_http::services::ServeFile;
 
-use tracing::{info, trace, warn};
+use tracing::{error, info, trace, warn};
+
+use anyhow::Context;
 
 use rand::prelude::*;
+
+use crate::jail::JailFuture;
 
 #[derive(Clone)]
 pub struct TimeSync {
@@ -33,16 +35,74 @@ impl TimeSync {
     }
 }
 
+#[pin_project(project = KindProj)]
+enum Kind<F> {
+    Normal(#[pin] F),
+    Jail(#[pin] super::jail::JailFuture),
+}
+
+#[pin_project]
+pub struct ResponseFuture<F> {
+    #[pin]
+    inner: Kind<F>,
+}
+
+impl<F> ResponseFuture<F> {
+    pub fn new_normal(fut: F) -> Self {
+        Self {
+            inner: Kind::Normal(fut),
+        }
+    }
+
+    pub fn new_deny_file<P: AsRef<Path>>(path: P, req: Request<Body>) -> Self {
+        Self {
+            inner: Kind::Jail(JailFuture::new_deny_file(path, req)),
+        }
+    }
+
+    pub fn new_deny_text() -> Self {
+        Self {
+            inner: Kind::Jail(JailFuture::new_deny_text()),
+        }
+    }
+
+    pub fn new_deny() -> Self {
+        Self {
+            inner: Kind::Jail(JailFuture::new_deny()),
+        }
+    }
+}
+
+impl<F, E> Future for ResponseFuture<F>
+where
+    F: Future<Output = Result<Response<Body>, E>>,
+{
+    type Output = Result<Response<Body>, E>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Cx<'_>) -> Poll<Self::Output> {
+        match self.project().inner.project() {
+            KindProj::Normal(fut) => fut.poll(cx),
+            KindProj::Jail(fut) => fut.poll(cx).map(|x| Ok(x.unwrap())),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct HostCheck<S> {
+    host: String,
     files: Vec<PathBuf>,
     time: TimeSync,
     inner: S,
 }
 
 impl<S> HostCheck<S> {
-    pub fn new(inner: S, files: Vec<PathBuf>, time: TimeSync) -> Self {
-        Self { inner, files, time }
+    pub fn new(inner: S, host: String, files: Vec<PathBuf>, time: TimeSync) -> Self {
+        Self {
+            inner,
+            host,
+            files,
+            time,
+        }
     }
 
     fn do_jail<F>(&self, req: Request<Body>) -> ResponseFuture<F> {
@@ -90,95 +150,6 @@ impl<S> HostCheck<S> {
     }
 }
 
-#[pin_project(project = KindProj)]
-enum Kind<F> {
-    Normal(#[pin] F),
-    DenyFile(#[pin] Oneshot<ServeFile, Request<Body>>),
-    DenyText,
-    Deny,
-}
-
-#[pin_project]
-pub struct ResponseFuture<F> {
-    #[pin]
-    inner: Kind<F>,
-}
-
-impl<F> ResponseFuture<F> {
-    pub fn new_normal(fut: F) -> Self {
-        Self {
-            inner: Kind::Normal(fut),
-        }
-    }
-
-    pub fn new_deny_file<P: AsRef<Path>>(path: P, req: Request<Body>) -> Self {
-        Self {
-            inner: Kind::DenyFile(Oneshot::new(ServeFile::new(path), req)),
-        }
-    }
-
-    pub fn new_deny_text() -> Self {
-        Self {
-            inner: Kind::DenyText,
-        }
-    }
-
-    pub fn new_deny() -> Self {
-        Self { inner: Kind::Deny }
-    }
-}
-
-impl<F, E> Future for ResponseFuture<F>
-where
-    F: Future<Output = Result<Response<Body>, E>>,
-{
-    type Output = Result<Response<Body>, E>;
-
-    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.project().inner.project() {
-            KindProj::Normal(fut) => fut.poll(cx),
-            KindProj::DenyFile(file) => file.poll(cx).map(|f| {
-                let mut res = f
-                    .expect("ServeFile should not error, it is infallible, please check")
-                    .into_response();
-
-                let headers = res.headers_mut();
-
-                // ServeFile assumes all the text is ascii, but thats very old and no fun, so fix
-                // all text/plain responses to correctly set the charset to utf-8
-                if let Some(ct) = headers.get(header::CONTENT_TYPE) {
-                    if ct == "text/plain" {
-                        headers.insert(
-                            header::CONTENT_TYPE,
-                            HeaderValue::from_static("text/plain; charset=utf-8"),
-                        );
-                    }
-                }
-
-                // don't let the browser store any response to avoid weird behavior
-                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-                // tell to display inline, hopefully fixes videos to properly play
-                headers.insert(
-                    header::CONTENT_DISPOSITION,
-                    HeaderValue::from_static("inline"),
-                );
-
-                return Ok(res);
-            }),
-            KindProj::DenyText => {
-                Poll::Ready(Ok(Response::new("rm -rf --no-preserve root /".into())))
-            }
-            KindProj::Deny => {
-                let res = Response::builder()
-                    .status(StatusCode::IM_A_TEAPOT)
-                    .body("I'm a Teapot!".into())
-                    .expect("hard coded http response fail");
-                Poll::Ready(Ok(res))
-            }
-        }
-    }
-}
-
 impl<S> Service<Request<Body>> for HostCheck<S>
 where
     S: Service<Request<Body>, Response = Response<Body>>,
@@ -190,9 +161,16 @@ where
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let path = req.uri().path();
 
+        // just junk random images or various things with 418
         if path == "/favicon.ico" {
             trace!("favicon.ico, discarding");
             return ResponseFuture::new_deny();
+        }
+
+        // deny known plaintext files
+        if path.ends_with(".env") {
+            trace!("denying plaintext file {}", path);
+            return ResponseFuture::new_deny_text();
         }
 
         // TODO: Seperate this out when the random file part gets sent into its own service, this
@@ -205,7 +183,7 @@ where
         if let Some(host) = req.headers().get(header::HOST) {
             let host = host.to_str().unwrap_or_default();
 
-            if !host.starts_with("aamaruvi.com") {
+            if host != self.host {
                 // skip over well-known and robots.txt because bots are supposed to read this one
                 if !path.starts_with("/.well-known") && path != "/robots.txt" {
                     trace!("jail hit for path {}, host {}", path, host);
@@ -221,10 +199,7 @@ where
         }
 
         // nice try but this isn't wordpress
-        if path.starts_with("/wp-admin")
-            || path.starts_with("/wp-includes")
-            || path.ends_with(".php")
-        {
+        if path.starts_with("/wp-") || path.ends_with(".php") {
             trace!("jail hit for wordpress requests path {}", path);
             return self.do_jail(req);
         }
@@ -247,7 +222,7 @@ where
         ResponseFuture::new_normal(self.inner.call(req))
     }
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Cx<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 }
@@ -255,28 +230,32 @@ where
 #[derive(Clone)]
 pub struct HostCheckLayer {
     time: TimeSync,
+    host: String,
     files: Vec<PathBuf>,
 }
 
 impl HostCheckLayer {
-    pub fn new() -> Self {
-        let this = Self {
-            time: TimeSync::new(),
-            files: Self::read_dir().unwrap_or_default(),
-        };
+    pub fn new() -> anyhow::Result<Self> {
+        let files = Self::read_dir().unwrap_or_default();
+        let len = files.len();
+        let time = TimeSync::new();
 
         // manually run the rng once, this instance is cloned across and the server should start
         // with a random file at first, if there was no files found, then HostCheck will fall back
         // to default text, check len manually because random will panic with a range of 0 to 0
-        let len = this.files.len();
         if len != 0 {
             trace!("initializing first file");
-            this.time
-                .cur_file
+            time.cur_file
                 .store(rand::rng().random_range(..len), Ordering::SeqCst);
+        } else {
+            error!("failed to read any files in static/jail, will only return basic deny");
         }
 
-        this
+        Ok(Self {
+            host: std::env::var("WEBSITE_HOST").context("failed to get WEBSITE_HOST")?,
+            time,
+            files,
+        })
     }
 
     fn read_dir() -> std::io::Result<Vec<PathBuf>> {
@@ -290,6 +269,11 @@ impl<S> Layer<S> for HostCheckLayer {
     type Service = HostCheck<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        HostCheck::new(inner, self.files.clone(), self.time.clone())
+        HostCheck::new(
+            inner,
+            self.host.clone(),
+            self.files.clone(),
+            self.time.clone(),
+        )
     }
 }

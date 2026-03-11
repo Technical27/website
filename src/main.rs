@@ -1,4 +1,5 @@
 mod host;
+mod jail;
 
 use axum::{Router, extract::ConnectInfo, response::Html, routing::get};
 
@@ -8,12 +9,13 @@ use serde_json::{Value, json};
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
 use std::net::SocketAddr;
+use std::str::FromStr;
 
 use askama::Template;
 
 use rand::prelude::*;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use axum_anyhow::ApiResult;
 
 use tracing::Level;
@@ -246,9 +248,14 @@ async fn robots() -> &'static str {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
-        .finish();
+    dotenvy::dotenv()?;
+
+    let level = std::env::var("WEBSITE_LOG_LEVEL")
+        .context("failed to get env WEBSITE_LOG_LEVEL")
+        .and_then(|x| Level::from_str(&x).context("failed to parse WEBSITE_LOG_LEVEL"))
+        .unwrap_or(Level::INFO);
+
+    let subscriber = FmtSubscriber::builder().with_max_level(level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     let app = Router::new()
@@ -267,10 +274,12 @@ async fn main() -> Result<()> {
             HeaderValue::from_static("no-cache"),
         ))
         // Internally sets no-store
-        .layer(host::HostCheckLayer::new());
+        .layer(host::HostCheckLayer::new()?);
 
-    // TODO: don't hardcode this
-    let listener = tokio::net::TcpListener::bind("[::]:14367").await?;
+    let listen_addr =
+        std::env::var("WEBSITE_BIND_ADDR").context("failed to read WEBSITE_BIND_ADDR")?;
+
+    let listener = tokio::net::TcpListener::bind(listen_addr).await?;
 
     axum::serve(
         listener,
