@@ -240,6 +240,10 @@ async fn matrix_server() -> Json<Value> {
     Json(json!({ "m.server": "matrix.aamaruvi.com:443" }))
 }
 
+async fn robots() -> &'static str {
+    "# if robot: beep boop beep beep boop\n# if human: hello there, please leave this is not your domain\nUser-agent: *\nDisallow: /\n"
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::builder()
@@ -254,6 +258,7 @@ async fn main() -> Result<()> {
         .route("/car", get(car))
         .route("/.well-known/matrix/client", get(matrix_client))
         .route("/.well-known/matrix/server", get(matrix_server))
+        .route("/robots.txt", get(robots))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
         // Set no-cache due to many dyanmic things on all parts of the website

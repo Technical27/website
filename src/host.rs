@@ -14,7 +14,7 @@ use tower::util::Oneshot;
 use tower::{Layer, Service};
 use tower_http::services::ServeFile;
 
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 
 use rand::prelude::*;
 
@@ -50,6 +50,7 @@ impl<S> HostCheck<S> {
 
         // attempting to chose a random with a range from 0 to 0 panics so early return
         if len == 0 {
+            warn!("no files to send, returning default response");
             return ResponseFuture::new_deny_text();
         }
 
@@ -60,10 +61,15 @@ impl<S> HostCheck<S> {
             let mut last_change = match self.time.last_change.lock() {
                 Ok(l) => l,
                 // TODO: if the mutex is poisoned deal with this correctly
-                Err(_) => return ResponseFuture::new_deny_text(),
+                Err(_) => {
+                    warn!("failed to lock mutex, returning default response");
+                    return ResponseFuture::new_deny_text();
+                }
             };
 
             if *last_change + Duration::from_secs(30) < cur {
+                trace!("longer than 30s since last media change, changing");
+
                 let mut rng = rand::rng();
                 *last_change = cur;
                 self.time
@@ -74,7 +80,10 @@ impl<S> HostCheck<S> {
 
         let path = match self.files.get(self.time.cur_file.load(Ordering::SeqCst)) {
             Some(p) => p,
-            None => return ResponseFuture::new_deny_text(),
+            None => {
+                warn!("failed to get file path, returning default response");
+                return ResponseFuture::new_deny_text();
+            }
         };
 
         ResponseFuture::new_deny_file(path, req)
@@ -197,16 +206,25 @@ where
             let host = host.to_str().unwrap_or_default();
 
             if !host.starts_with("aamaruvi.com") {
-                // skip over well-known because bots are supposed to read this one
-                if !path.starts_with("/.well-known") {
+                // skip over well-known and robots.txt because bots are supposed to read this one
+                if !path.starts_with("/.well-known") && path != "/robots.txt" {
                     trace!("jail hit for path {}, host {}", path, host);
                     return self.do_jail(req);
                 }
             }
         }
 
+        // junk or weird paths to get around bad filtering (ironic being said here)
+        if path.starts_with("//") {
+            trace!("jail hit for malformed path {}", path);
+            return self.do_jail(req);
+        }
+
         // nice try but this isn't wordpress
-        if path.starts_with("/wp-admin") || path.starts_with("/wp-includes") || path.ends_with(".php") {
+        if path.starts_with("/wp-admin")
+            || path.starts_with("/wp-includes")
+            || path.ends_with(".php")
+        {
             trace!("jail hit for wordpress requests path {}", path);
             return self.do_jail(req);
         }
@@ -219,6 +237,7 @@ where
             && path != "/about"
             && path != "/.well-known/matrix/client"
             && path != "/.well-known/matrix/server"
+            && path != "/robots.txt"
         {
             info!("strange path request: {}", path);
         } else {
