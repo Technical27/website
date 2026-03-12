@@ -1,19 +1,21 @@
+use std::net::{IpAddr, SocketAddr};
 use std::path::Path;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use axum::extract::ConnectInfo;
 use pin_project::pin_project;
 
 use axum::body::Body;
 
-use http::{Request, Response, header};
+use http::{HeaderValue, Request, Response, header};
 
 use tower::{Layer, Service};
 
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 
-use super::AppState;
 use super::jail::JailFuture;
+use super::{AppConfig, AppState};
 
 #[pin_project(project = KindProj)]
 enum Kind<F> {
@@ -70,12 +72,17 @@ where
 #[derive(Clone)]
 pub struct HostCheck<S> {
     state: Arc<AppState>,
+    config: AppConfig,
     inner: S,
 }
 
 impl<S> HostCheck<S> {
-    pub fn new(inner: S, state: Arc<AppState>) -> Self {
-        Self { inner, state }
+    pub fn new(inner: S, state: Arc<AppState>, config: AppConfig) -> Self {
+        Self {
+            inner,
+            state,
+            config,
+        }
     }
 
     fn do_jail<F>(&self, req: Request<Body>) -> ResponseFuture<F> {
@@ -83,6 +90,10 @@ impl<S> HostCheck<S> {
             Some(path) => ResponseFuture::new_deny_file(path, req),
             None => ResponseFuture::new_deny_text(),
         }
+    }
+
+    fn parse_xff(&self, hdr: &HeaderValue) -> Option<IpAddr> {
+        hdr.to_str().ok().and_then(|x| x.parse().ok())
     }
 }
 
@@ -94,7 +105,7 @@ where
     type Error = S::Error;
     type Future = ResponseFuture<S::Future>;
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
         let headers = req.headers();
         let path = req.uri().path();
 
@@ -113,7 +124,7 @@ where
         if let Some(host) = headers.get(header::HOST) {
             let host = host.to_str().unwrap_or_default();
 
-            if host != self.state.host {
+            if host != self.config.host {
                 // skip over well-known and robots.txt because bots are supposed to read this one
                 if !path.starts_with("/.well-known") && path != "/robots.txt" {
                     trace!("jail hit for path {}, host {}", path, host);
@@ -134,20 +145,56 @@ where
             return self.do_jail(req);
         }
 
+        // generic paths
+        if path.starts_with("/cgi-bin") || path.starts_with("/upload") {
+            trace!("jail hit for common path {}", path);
+            return self.do_jail(req);
+        }
+
         // TODO: don't hardcode this
         if !path.starts_with("/static")
+            && !path.starts_with("/.well-known/matrix")
             && path != "/car"
             && path != "/"
             && path != "/art"
             && path != "/about"
-            && path != "/.well-known/matrix/client"
-            && path != "/.well-known/matrix/server"
+            && path != "/.well-known/discord"
             && path != "/robots.txt"
             && path != "/jail"
         {
             info!("strange path request: {}", path);
         } else {
             trace!("path request: {}", path);
+        }
+
+        // add on the correct host headers to an extension
+        if self.config.rpoxy {
+            if let Some(xff) = headers
+                .get("X-Forwarded-For")
+                .and_then(|x| self.parse_xff(x))
+            {
+                trace!("adding source ip from X-Forwarded-For: {}", xff);
+                req.extensions_mut().insert(xff);
+            } else {
+                warn!(
+                    "unable to parse xff and is configured to be behind a reverse proxy, please check"
+                );
+                req.extensions_mut()
+                    .insert("0.0.0.0".parse::<IpAddr>().unwrap());
+            }
+        } else {
+            if let Some(addr) = req
+                .extensions()
+                .get::<ConnectInfo<SocketAddr>>()
+                .map(|x| x.ip())
+            {
+                trace!("adding source ip from socket connection: {}", addr);
+                req.extensions_mut().insert(addr);
+            } else {
+                warn!("no ip could be extracted from socket, adding all zeros");
+                req.extensions_mut()
+                    .insert("0.0.0.0".parse::<IpAddr>().unwrap());
+            }
         }
 
         ResponseFuture::new_normal(self.inner.call(req))
@@ -161,11 +208,12 @@ where
 #[derive(Clone)]
 pub struct HostCheckLayer {
     state: Arc<AppState>,
+    config: AppConfig,
 }
 
 impl HostCheckLayer {
-    pub fn new(state: Arc<AppState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<AppState>, config: AppConfig) -> Self {
+        Self { state, config }
     }
 }
 
@@ -173,6 +221,6 @@ impl<S> Layer<S> for HostCheckLayer {
     type Service = HostCheck<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        HostCheck::new(inner, self.state.clone())
+        HostCheck::new(inner, self.state.clone(), self.config.clone())
     }
 }

@@ -3,20 +3,20 @@ mod jail;
 
 use axum::extract::{Request, State};
 use axum::response::Response;
-use axum::{Router, extract::ConnectInfo, response::Html, routing::get};
+use axum::{Extension, Router, response::Html, routing::get};
 
 use axum::Json;
 use http::{HeaderValue, header};
 use serde_json::{Value, json};
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
-use std::net::SocketAddr;
+use std::env;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::env;
 
 use askama::Template;
 
@@ -34,7 +34,12 @@ pub struct AppState {
     last_change: Mutex<Instant>,
     cur_file: AtomicUsize,
     filenames: Vec<PathBuf>,
+}
+
+#[derive(Clone)]
+pub struct AppConfig {
     host: String,
+    rpoxy: bool,
 }
 
 impl AppState {
@@ -78,7 +83,7 @@ impl AppState {
 #[template(path = "index.html")]
 struct RootTemplate<'a> {
     title: &'a str,
-    source: &'a SocketAddr,
+    is_ipv6: bool,
 }
 
 #[derive(Template)]
@@ -263,10 +268,10 @@ fn motd() -> Result<&'static str> {
     }
 }
 
-async fn root(connection: ConnectInfo<SocketAddr>) -> ApiResult<Html<String>> {
+async fn root(src: Extension<IpAddr>) -> ApiResult<Html<String>> {
     let root_template = RootTemplate {
         title: &motd()?,
-        source: &connection,
+        is_ipv6: src.is_ipv6(),
     };
     Ok(Html(root_template.render()?))
 }
@@ -320,8 +325,14 @@ fn init_state() -> Result<Arc<AppState>> {
         cur_file: AtomicUsize::new(idx),
         last_change: Mutex::new(Instant::now()),
         filenames: files,
-        host: env::var("WEBSITE_HOST").context("failed to get WEBSITE_HOST")?,
     }))
+}
+
+fn init_config() -> Result<AppConfig> {
+    Ok(AppConfig {
+        host: env::var("WEBSITE_HOST").context("failed to get WEBSITE_HOST")?,
+        rpoxy: env::var_os("WEBSITE_RPROXY").is_some(),
+    })
 }
 
 async fn jail(state: State<Arc<AppState>>, req: Request) -> Response {
@@ -348,6 +359,7 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     let state = init_state()?;
+    let config = init_config()?;
 
     let app = Router::new()
         .route("/", get(root))
@@ -366,11 +378,10 @@ async fn main() -> Result<()> {
             HeaderValue::from_static("no-cache"),
         ))
         // Internally sets no-store when needed
-        .layer(host::HostCheckLayer::new(state.clone()))
+        .layer(host::HostCheckLayer::new(state.clone(), config))
         .with_state(state);
 
-    let listen_addr =
-        env::var("WEBSITE_BIND_ADDR").context("failed to read WEBSITE_BIND_ADDR")?;
+    let listen_addr = env::var("WEBSITE_BIND_ADDR").context("failed to read WEBSITE_BIND_ADDR")?;
 
     let listener = tokio::net::TcpListener::bind(listen_addr).await?;
 
