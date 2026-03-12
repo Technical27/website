@@ -1,6 +1,8 @@
 mod host;
 mod jail;
 
+use axum::extract::{Request, State};
+use axum::response::Response;
 use axum::{Router, extract::ConnectInfo, response::Html, routing::get};
 
 use axum::Json;
@@ -9,7 +11,12 @@ use serde_json::{Value, json};
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use std::env;
 
 use askama::Template;
 
@@ -18,8 +25,54 @@ use rand::prelude::*;
 use anyhow::{Context, Result, anyhow};
 use axum_anyhow::ApiResult;
 
-use tracing::Level;
+use tracing::{Level, error, trace, warn};
 use tracing_subscriber::FmtSubscriber;
+
+use jail::JailFuture;
+
+pub struct AppState {
+    last_change: Mutex<Instant>,
+    cur_file: AtomicUsize,
+    filenames: Vec<PathBuf>,
+    host: String,
+}
+
+impl AppState {
+    pub fn get_jail_file(&self) -> Option<&PathBuf> {
+        let len = self.filenames.len();
+
+        // attempting to chose a random with a range from 0 to 0 panics so early return
+        if len == 0 {
+            trace!("no files to send, returning default response");
+            return None;
+        }
+
+        // lock the mutex to access the last index change instant, then determine if a new file
+        // should be used for the jail
+        {
+            let cur = Instant::now();
+            let mut last_change = match self.last_change.lock() {
+                Ok(l) => l,
+                // TODO: if the mutex is poisoned deal with this correctly
+                Err(_) => {
+                    warn!("failed to lock mutex, returning default response");
+                    return None;
+                }
+            };
+
+            if *last_change + Duration::from_secs(30) < cur {
+                trace!("longer than 30s since last media change, changing");
+
+                let mut rng = rand::rng();
+                *last_change = cur;
+                self.cur_file
+                    .store(rng.random_range(..len), Ordering::SeqCst);
+            }
+        }
+
+        self.filenames.get(self.cur_file.load(Ordering::SeqCst))
+    }
+}
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -246,17 +299,55 @@ async fn robots() -> &'static str {
     "# if robot: beep boop beep beep boop\n# if human: hello there, please leave this is not your domain\nUser-agent: *\nDisallow: /\n"
 }
 
+fn read_dir() -> std::io::Result<Vec<PathBuf>> {
+    std::fs::read_dir("static/jail")?
+        .map(|res| res.map(|e| e.path()))
+        .collect()
+}
+
+fn init_state() -> Result<Arc<AppState>> {
+    let files = read_dir()?;
+    let len = files.len();
+
+    let idx = if len == 0 {
+        error!("failed to read any files, jail will be not functional");
+        0
+    } else {
+        rand::rng().random_range(..len)
+    };
+
+    Ok(Arc::new(AppState {
+        cur_file: AtomicUsize::new(idx),
+        last_change: Mutex::new(Instant::now()),
+        filenames: files,
+        host: env::var("WEBSITE_HOST").context("failed to get WEBSITE_HOST")?,
+    }))
+}
+
+async fn jail(state: State<Arc<AppState>>, req: Request) -> Response {
+    trace!("intended jail link, sending jail response");
+
+    match state.get_jail_file() {
+        Some(p) => JailFuture::new_deny_file(p, req),
+        None => JailFuture::new_deny_text(),
+    }
+    .await
+    .unwrap()
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv()?;
 
-    let level = std::env::var("WEBSITE_LOG_LEVEL")
+    let level = env::var("WEBSITE_LOG_LEVEL")
         .context("failed to get env WEBSITE_LOG_LEVEL")
         .and_then(|x| Level::from_str(&x).context("failed to parse WEBSITE_LOG_LEVEL"))
         .unwrap_or(Level::INFO);
 
     let subscriber = FmtSubscriber::builder().with_max_level(level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
+
+    let state = init_state()?;
 
     let app = Router::new()
         .route("/", get(root))
@@ -266,6 +357,7 @@ async fn main() -> Result<()> {
         .route("/.well-known/matrix/client", get(matrix_client))
         .route("/.well-known/matrix/server", get(matrix_server))
         .route("/robots.txt", get(robots))
+        .route("/jail", get(jail))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
         // Set no-cache due to many dyanmic things on all parts of the website
@@ -273,11 +365,12 @@ async fn main() -> Result<()> {
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-cache"),
         ))
-        // Internally sets no-store
-        .layer(host::HostCheckLayer::new()?);
+        // Internally sets no-store when needed
+        .layer(host::HostCheckLayer::new(state.clone()))
+        .with_state(state);
 
     let listen_addr =
-        std::env::var("WEBSITE_BIND_ADDR").context("failed to read WEBSITE_BIND_ADDR")?;
+        env::var("WEBSITE_BIND_ADDR").context("failed to read WEBSITE_BIND_ADDR")?;
 
     let listener = tokio::net::TcpListener::bind(listen_addr).await?;
 
