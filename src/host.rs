@@ -140,7 +140,8 @@ where
         }
 
         // nice try but this isn't wordpress
-        if path.starts_with("/wp-") || path.ends_with(".php") {
+        let lpath = path.to_ascii_lowercase();
+        if lpath.starts_with("/wp") || lpath.ends_with(".php") {
             trace!("jail hit for wordpress requests path {}", path);
             return self.do_jail(req);
         }

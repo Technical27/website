@@ -13,7 +13,7 @@ use tower_http::services::ServeFile;
 
 #[pin_project(project = KindProj)]
 enum Kind {
-    DenyFile(#[pin] Oneshot<ServeFile, Request<Body>>),
+    DenyFile(#[pin] Box<Oneshot<ServeFile, Request<Body>>>),
     DenyText,
     Deny,
 }
@@ -27,7 +27,7 @@ pub struct JailFuture {
 impl JailFuture {
     pub fn new_deny_file<P: AsRef<Path>>(path: P, req: Request<Body>) -> Self {
         Self {
-            inner: Kind::DenyFile(Oneshot::new(ServeFile::new(path), req)),
+            inner: Kind::DenyFile(Box::new(Oneshot::new(ServeFile::new(path), req))),
         }
     }
 
@@ -56,13 +56,13 @@ impl Future for JailFuture {
 
                 // ServeFile assumes all the text is ascii, but thats very old and no fun, so fix
                 // all text/plain responses to correctly set the charset to utf-8
-                if let Some(ct) = headers.get(header::CONTENT_TYPE) {
-                    if ct == "text/plain" {
-                        headers.insert(
-                            header::CONTENT_TYPE,
-                            HeaderValue::from_static("text/plain; charset=utf-8"),
-                        );
-                    }
+                if let Some(ct) = headers.get(header::CONTENT_TYPE)
+                    && ct == "text/plain"
+                {
+                    headers.insert(
+                        header::CONTENT_TYPE,
+                        HeaderValue::from_static("text/plain; charset=utf-8"),
+                    );
                 }
 
                 // don't let the browser store any response to avoid weird behavior

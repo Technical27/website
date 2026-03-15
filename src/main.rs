@@ -100,24 +100,36 @@ struct ArtTemplate<'a> {
 
 // TODO: move this out of main
 const MOTD: &'static [&'static str] = &[
+    // ASCII AAAA in hexadecimal
     "0x41414141",
+    // funny ibm bios error from clab retro video
     "48/00/1980",
+    // personal ;)
     "21522",
     "5555",
+    // unix time epoch
     "1970-01-01",
+    // hp48 max real
     "9.99999999999E499",
+    // some digits of pi
     "3.14159265",
+    // kerbal green
     "0xbada55",
+    // funny word/numbers
     "0xcafebabe",
     "8008135",
     "67",
+    // x86 asm interrupt instruction
     "int3",
+    // frequency of an A above middle C
     "440hz",
+    // camera aperture
     "f/4",
     "SWING!",
     "WHO THE FUCK IS OCTAVE",
+    // BMW engine
     "N52",
-    "48khz/24bit",
+    "48kHz/24bit",
     "mls",
     "LO SIENTO",
     "WILSON",
@@ -128,10 +140,12 @@ const MOTD: &'static [&'static str] = &[
     "tch... newgens...",
     "jamie paige is mid af",
     "all caps or no caps",
+    // Marco Reps Fluke 8508A repair
     "-8.892098 kohm",
     "MUSTARRRRRDDDDD",
     "undefined",
     "Segmentation fault",
+    // Marco Reps HP3458A repairathon
     "TEMP('C) -1583.1",
     "hello james. yes, YOU🫵",
     "Shit man, this beat league is fucked.",
@@ -156,11 +170,13 @@ const MOTD: &'static [&'static str] = &[
     "I'm Quaving",
     "all hail boobs and beating off",
     "i'm so fucking TIIIIIRED",
+    // memorized
     "eating is living",
     "you say the lines",
     "the syllables",
     "got it memorized so i can make it stop",
     "rest up! god im tired",
+    // INVISIBLE
     "When you can't even say my name",
     "Finished `dev` profile [unoptimized + debuginfo] targets(s) in 0.69s",
     "Hey you, you're finally awake",
@@ -176,18 +192,23 @@ const MOTD: &'static [&'static str] = &[
     "man door hand hook car door",
     "Stealy Wheely Automobiley",
     "One day you will be dead.",
+    // Deep Rock Galactic
     "ROCK AND STONE",
     "WE'RE RICH",
+    // Easy Delivery Company
     "Have an Easy day!",
     "A HIDEO KOJIMA PRODUCTION",
     "3 babies 1 minivan",
     "You just lost the game.",
     "CorrectHorseBatteryStaple",
     "The 15th Standard",
+    // Japanese Symbol for Beginner.
     "🔰",
+    // UNBEATABLE arcade titles
     "god dammed tired.",
     "memorizer",
     "featuring",
+    // famous
     "DOOR STUCK DOOR STUCK",
     "PLEASE I BEG YOU",
     "PERFECT+31",
@@ -199,12 +220,14 @@ const MOTD: &'static [&'static str] = &[
     "how to quit vim?",
     "SCSI",
     "FORK FOUND IN KITCHEN",
+    // famous CoD lines
     "THE NUMBERS MASON",
     "WHAT DO THEY MEAN",
     "Press F to Pay Respects",
     "Soap, what the hell kinda name is Soap?",
     "Turbofish",
     "Wayland is great",
+    // VIN WMIs for BMW
     "WBA",
     "WBS",
     "3MW",
@@ -220,12 +243,17 @@ const MOTD: &'static [&'static str] = &[
     "i also have to look up song lyrics",
     "take backwards crowbar of the right",
     "how to use git tutorial 2026 working",
+    // ava
     "ava",
+    // amazing mobile game ad
     "TheLegend27",
     "rating up! +0.000",
+    // i wrote this before even making it to chapter 6 or doing encore
     "the best ragebait is vivid/stasis",
+    // car tires are measured in such a dumb way
     "255/35R18",
     "hi bramble",
+    // RFC april fools joke
     "HTCPCP",
     "HTCPCP-TEA",
     "quabubu",
@@ -235,18 +263,22 @@ const MOTD: &'static [&'static str] = &[
     "what if jfk shot back",
     "judge judy and executioner",
     "women🔥",
+    // common one
     "crazy, i was crazy once",
     "they locked me in a room",
     "a rubber room with rats",
     "the rats made me crazy",
+    // common one with changed text
     "quazy, i was quazy once",
     "they locked me in a room",
     "a room with quaverlings",
     "the quaverlings made me quazy",
+    // UNBEATABLE is
     "Quaver",
     "Beat",
     "Treble",
     "Clef",
+    // some classics
     "SOI SOI SOI SOI",
     "nyancat",
     "man this audio is shit",
@@ -256,9 +288,38 @@ const MOTD: &'static [&'static str] = &[
     "painting with dirt",
     "c418 - sweden",
     "Battle Tapes",
+    // usedcvnt
     "the world doesn't care",
     "carbon fiber towels",
     "LIQUIMOLY",
+    "window.location.href = \"/i/am/very/smart\"",
+    "its some good schiit",
+    // cd quality is damn good
+    "44.1kHz/16bit is peak audio",
+    // re-tuned
+    "when i lose my mind",
+    "will you help me find it",
+    "or will you leave me to rot",
+    // famous song
+    "you know the rules",
+    "and so do i",
+    "never gonna give you up",
+    // shhh
+    "/i/am/very/smart",
+    "Prepare for Titanfall",
+    "dt770s are amazing",
+    "RS-232",
+    "its actually DE-9 and DB-25",
+    "pipewire is magic",
+    // Where Wayland got its name
+    "Wayland, Massachusetts",
+    // BMW engine
+    "S65B40",
+    "S62B50",
+    // Ohio
+    "Ohio",
+    // ISO film speed is a combo of ASA and DIN but most just leave the DIN part out
+    "ISO = ASA/DIN",
 ];
 
 fn motd() -> Result<&'static str> {
@@ -302,6 +363,32 @@ async fn matrix_server() -> Json<Value> {
 
 async fn robots() -> &'static str {
     "# if robot: beep boop beep beep boop\n# if human: hello there, please leave this is not your domain\nUser-agent: *\nDisallow: /\n"
+}
+
+async fn idiot() -> Html<&'static str> {
+    Html(
+        "
+<html>
+<body>
+<object><embed src=\"/static/youare.swf\"/></object>
+<script>
+window.RufflePlayer = window.RufflePlayer || {};
+window.RufflePlayer.config = {
+    ...window.RufflePlayer.config,
+};
+window.addEventListener(\"load\", (event) => {
+    const ruffle = window.RufflePlayer.newest();
+    const player = ruffle.createPlayer();
+    const container = document.getElementById(\"container\");
+    container.appendChild(player);
+    player.ruffle().load(\"static/youare.swf\");
+});
+</script>
+<script src=\"https://unpkg.com/@ruffle-rs/ruffle\"></script>
+</body>
+</html>
+",
+    )
 }
 
 fn read_dir() -> std::io::Result<Vec<PathBuf>> {
@@ -370,6 +457,7 @@ async fn main() -> Result<()> {
         .route("/.well-known/matrix/server", get(matrix_server))
         .route("/robots.txt", get(robots))
         .route("/jail", get(jail))
+        .route("/i/am/very/smart", get(idiot))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
         // Set no-cache due to many dyanmic things on all parts of the website
