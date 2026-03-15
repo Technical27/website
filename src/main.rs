@@ -99,7 +99,7 @@ struct ArtTemplate<'a> {
 }
 
 // TODO: move this out of main
-const MOTD: &'static [&'static str] = &[
+const MOTD: &[&str] = &[
     // ASCII AAAA in hexadecimal
     "0x41414141",
     // funny ibm bios error from clab retro video
@@ -331,19 +331,19 @@ fn motd() -> Result<&'static str> {
 
 async fn root(src: Extension<IpAddr>) -> ApiResult<Html<String>> {
     let root_template = RootTemplate {
-        title: &motd()?,
+        title: motd()?,
         is_ipv6: src.is_ipv6(),
     };
     Ok(Html(root_template.render()?))
 }
 
 async fn about() -> ApiResult<Html<String>> {
-    let about_template = AboutTemplate { title: &motd()? };
+    let about_template = AboutTemplate { title: motd()? };
     Ok(Html(about_template.render()?))
 }
 
 async fn art() -> ApiResult<Html<String>> {
-    let art_template = ArtTemplate { title: &motd()? };
+    let art_template = ArtTemplate { title: motd()? };
     Ok(Html(art_template.render()?))
 }
 

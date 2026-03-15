@@ -73,7 +73,7 @@ impl Future for JailFuture {
                     HeaderValue::from_static("inline"),
                 );
 
-                return Ok(res);
+                Ok(res)
             }),
             KindProj::DenyText => {
                 Poll::Ready(Ok(Response::new("rm -rf --no-preserve root /\n\n".into())))

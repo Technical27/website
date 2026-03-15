@@ -162,6 +162,7 @@ where
             && path != "/.well-known/discord"
             && path != "/robots.txt"
             && path != "/jail"
+            && path != "/i/am/very/smart"
         {
             info!("strange path request: {}", path);
         } else {
@@ -183,19 +184,17 @@ where
                 req.extensions_mut()
                     .insert("0.0.0.0".parse::<IpAddr>().unwrap());
             }
+        } else if let Some(addr) = req
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|x| x.ip())
+        {
+            trace!("adding source ip from socket connection: {}", addr);
+            req.extensions_mut().insert(addr);
         } else {
-            if let Some(addr) = req
-                .extensions()
-                .get::<ConnectInfo<SocketAddr>>()
-                .map(|x| x.ip())
-            {
-                trace!("adding source ip from socket connection: {}", addr);
-                req.extensions_mut().insert(addr);
-            } else {
-                warn!("no ip could be extracted from socket, adding all zeros");
-                req.extensions_mut()
-                    .insert("0.0.0.0".parse::<IpAddr>().unwrap());
-            }
+            warn!("no ip could be extracted from socket, adding all zeros");
+            req.extensions_mut()
+                .insert("0.0.0.0".parse::<IpAddr>().unwrap());
         }
 
         ResponseFuture::new_normal(self.inner.call(req))
