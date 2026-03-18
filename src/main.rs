@@ -6,7 +6,7 @@ use axum::response::Response;
 use axum::{Extension, Router, response::Html, routing::get};
 
 use axum::Json;
-use http::{HeaderValue, header};
+use http::{HeaderValue, StatusCode, header};
 use serde_json::{Value, json};
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
@@ -22,8 +22,8 @@ use askama::Template;
 
 use rand::prelude::*;
 
-use anyhow::{Context, Result, anyhow};
-use axum_anyhow::ApiResult;
+use anyhow::{Context, Result};
+use axum_anyhow::{ApiError, ApiResult, ResultExt};
 
 use tracing::{Level, error, trace, warn};
 use tracing_subscriber::FmtSubscriber;
@@ -322,29 +322,39 @@ const MOTD: &[&str] = &[
     "ISO = ASA/DIN",
 ];
 
-fn motd() -> Result<&'static str> {
+fn motd() -> ApiResult<&'static str> {
     match MOTD.iter().choose(&mut rand::rng()) {
         Some(m) => Ok(m),
-        None => Err(anyhow!("failed to choose motd")),
+        None => Err(ApiError::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .title("Internal Server Error")
+            .detail("motd machine broke ask again tomorrow")
+            .build()),
     }
 }
 
-async fn root(src: Extension<IpAddr>) -> ApiResult<Html<String>> {
-    let root_template = RootTemplate {
+type HtmlTemplate = ApiResult<Html<String>>;
+
+fn render_template(template: &impl Template) -> HtmlTemplate {
+    template
+        .render()
+        .context_internal("Internal Server Error", "Failed to work right idk")
+        .map(Html)
+}
+
+async fn root(src: Extension<IpAddr>) -> HtmlTemplate {
+    render_template(&RootTemplate {
         title: motd()?,
         is_ipv6: src.is_ipv6(),
-    };
-    Ok(Html(root_template.render()?))
+    })
 }
 
-async fn about() -> ApiResult<Html<String>> {
-    let about_template = AboutTemplate { title: motd()? };
-    Ok(Html(about_template.render()?))
+async fn about() -> HtmlTemplate {
+    render_template(&AboutTemplate { title: motd()? })
 }
 
-async fn art() -> ApiResult<Html<String>> {
-    let art_template = ArtTemplate { title: motd()? };
-    Ok(Html(art_template.render()?))
+async fn art() -> HtmlTemplate {
+    render_template(&ArtTemplate { title: motd()? })
 }
 
 async fn car() -> ApiResult<String> {

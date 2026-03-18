@@ -74,11 +74,16 @@ h6 {
 }
 
 h1, h2, h3, h4, h5, h6,
-p, ul, ol,
+ul, ol,
 img, figure, video,
 table {
   margin: 25px 0;
   color: var(--foreground);
+}
+
+p {
+  margin: 25px 0;
+  color: var(--s-text);
 }
 
 a {
