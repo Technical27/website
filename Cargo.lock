@@ -1004,7 +1004,6 @@ dependencies = [
  "askama",
  "axum",
  "axum-anyhow",
- "bytes",
  "dotenvy",
  "http",
  "pin-project",
