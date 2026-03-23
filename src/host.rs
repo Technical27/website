@@ -152,6 +152,32 @@ where
             return self.do_jail(req);
         }
 
+        // add on the correct host headers to an extension
+        let addr = if self.config.rpoxy {
+            if let Some(xff) = headers
+                .get("X-Forwarded-For")
+                .and_then(|x| self.parse_xff(x))
+            {
+                trace!("adding source ip from X-Forwarded-For: {}", xff);
+                xff
+            } else {
+                warn!(
+                    "unable to parse xff and is configured to be behind a reverse proxy, please check"
+                );
+                "0.0.0.0".parse::<IpAddr>().unwrap()
+            }
+        } else if let Some(addr) = req
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|x| x.ip())
+        {
+            trace!("adding source ip from socket connection: {}", addr);
+            addr
+        } else {
+            warn!("no ip could be extracted from socket, adding all zeros");
+            "0.0.0.0".parse::<IpAddr>().unwrap()
+        };
+
         // TODO: don't hardcode this
         if !path.starts_with("/static")
             && !path.starts_with("/.well-known/matrix")
@@ -169,33 +195,7 @@ where
             trace!("path request: {}", path);
         }
 
-        // add on the correct host headers to an extension
-        if self.config.rpoxy {
-            if let Some(xff) = headers
-                .get("X-Forwarded-For")
-                .and_then(|x| self.parse_xff(x))
-            {
-                trace!("adding source ip from X-Forwarded-For: {}", xff);
-                req.extensions_mut().insert(xff);
-            } else {
-                warn!(
-                    "unable to parse xff and is configured to be behind a reverse proxy, please check"
-                );
-                req.extensions_mut()
-                    .insert("0.0.0.0".parse::<IpAddr>().unwrap());
-            }
-        } else if let Some(addr) = req
-            .extensions()
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|x| x.ip())
-        {
-            trace!("adding source ip from socket connection: {}", addr);
-            req.extensions_mut().insert(addr);
-        } else {
-            warn!("no ip could be extracted from socket, adding all zeros");
-            req.extensions_mut()
-                .insert("0.0.0.0".parse::<IpAddr>().unwrap());
-        }
+        req.extensions_mut().insert(addr);
 
         ResponseFuture::new_normal(self.inner.call(req))
     }

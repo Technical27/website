@@ -83,7 +83,7 @@ impl AppState {
 #[template(path = "index.html")]
 struct RootTemplate<'a> {
     title: &'a str,
-    is_ipv6: bool,
+    messages: &'a [&'a str],
 }
 
 #[derive(Template)]
@@ -95,6 +95,12 @@ struct AboutTemplate<'a> {
 #[derive(Template)]
 #[template(path = "art.html")]
 struct ArtTemplate<'a> {
+    title: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "smart.html")]
+struct SmartTemplate<'a> {
     title: &'a str,
 }
 
@@ -343,9 +349,18 @@ fn render_template(template: &impl Template) -> HtmlTemplate {
 }
 
 async fn root(src: Extension<IpAddr>) -> HtmlTemplate {
+    let mut msgs = Vec::new();
+    if src.is_ipv6() {
+        msgs.push("you are connected over IPv6 and participating in the transition away from a fundamentally broken internet");
+    }
+
+    if rand::rng().random_ratio(1, 20) {
+        msgs.push("something is at /i/am/very/smart");
+    }
+
     render_template(&RootTemplate {
         title: motd()?,
-        is_ipv6: src.is_ipv6(),
+        messages: &msgs,
     })
 }
 
@@ -375,30 +390,8 @@ async fn robots() -> &'static str {
     "# if robot: beep boop beep beep boop\n# if human: hello there, please leave this is not your domain\nUser-agent: *\nDisallow: /\n"
 }
 
-async fn idiot() -> Html<&'static str> {
-    Html(
-        "
-<html>
-<body>
-<object><embed src=\"/static/youare.swf\"/></object>
-<script>
-window.RufflePlayer = window.RufflePlayer || {};
-window.RufflePlayer.config = {
-    ...window.RufflePlayer.config,
-};
-window.addEventListener(\"load\", (event) => {
-    const ruffle = window.RufflePlayer.newest();
-    const player = ruffle.createPlayer();
-    const container = document.getElementById(\"container\");
-    container.appendChild(player);
-    player.ruffle().load(\"static/youare.swf\");
-});
-</script>
-<script src=\"https://unpkg.com/@ruffle-rs/ruffle\"></script>
-</body>
-</html>
-",
-    )
+async fn idiot() -> HtmlTemplate {
+    render_template(&SmartTemplate { title: motd()? })
 }
 
 fn read_dir() -> std::io::Result<Vec<PathBuf>> {

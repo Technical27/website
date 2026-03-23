@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <title>aamaruvi's website: {{ title }}</title>
+  </head>
+  <body id="container">
+  <script>
+  window.RufflePlayer = window.RufflePlayer || {};
+  window.RufflePlayer.config = {
+    ...window.RufflePlayer.config,
+  };
+  window.addEventListener("load", event => {
+    const ruffle = window.RufflePlayer.newest();
+    const player = ruffle.createPlayer();
+    const container = document.getElementById("container");
+    container.appendChild(player);
+    player.ruffle().load("/static/youare.swf");
+  });
+  </script>
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+  </body>
+</html>
