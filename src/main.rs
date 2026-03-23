@@ -436,6 +436,26 @@ async fn jail(state: State<Arc<AppState>>, req: Request) -> Response {
     .unwrap()
 }
 
+
+#[derive(Template)]
+#[template(path = "blog.html")]
+struct BlogTemplate<'a> {
+    motd: &'a str,
+    markdown: String,
+}
+
+async fn md_test() -> HtmlTemplate {
+let markdown_str = r#"
+hello
+=====
+# test
+
+* alpha
+* beta
+"#;
+    render_template(&BlogTemplate { motd: motd()?, markdown: ferromark::to_html(markdown_str) })
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv()?;
@@ -461,6 +481,7 @@ async fn main() -> Result<()> {
         .route("/robots.txt", get(robots))
         .route("/jail", get(jail))
         .route("/i/am/very/smart", get(idiot))
+        .route("/md", get(md_test))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
         // Set no-cache due to many dyanmic things on all parts of the website
