@@ -181,6 +181,7 @@ where
         // TODO: don't hardcode this
         if !path.starts_with("/static")
             && !path.starts_with("/.well-known/matrix")
+            && !path.starts_with("/blog")
             && path != "/car"
             && path != "/"
             && path != "/art"

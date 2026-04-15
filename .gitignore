@@ -4,6 +4,9 @@
 # the code doesn't care about much so its ok
 /static/jail
 
+# for now keep entries out of github
+/blog
+
 # shhh
 .well-known
 .env
