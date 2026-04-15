@@ -1,7 +1,9 @@
+#![feature(path_trailing_sep)]
+
 mod host;
 mod jail;
 
-use axum::extract::{Request, State};
+use axum::extract::{Request, State, Path};
 use axum::response::Response;
 use axum::{Extension, Router, response::Html, routing::get};
 
@@ -284,6 +286,8 @@ const MOTD: &[&str] = &[
     "Beat",
     "Treble",
     "Clef",
+    "Rest",
+    "and YOU",
     // some classics
     "SOI SOI SOI SOI",
     "nyancat",
@@ -324,6 +328,7 @@ const MOTD: &[&str] = &[
     "S62B50",
     // Ohio
     "Ohio",
+    "ANYWHERE BUT OHIO",
     // ISO film speed is a combo of ASA and DIN but most just leave the DIN part out
     "ISO = ASA/DIN",
 ];
@@ -444,16 +449,25 @@ struct BlogTemplate<'a> {
     markdown: String,
 }
 
-async fn md_test() -> HtmlTemplate {
-let markdown_str = r#"
-hello
-=====
-# test
+async fn blog_render(Path(mut md_path): Path<std::path::PathBuf>) -> HtmlTemplate {
+    // XXX: check if this actually could be possible
+    if md_path.is_absolute() {
+                return Err(anyhow::anyhow!("error").into());
+    }
 
-* alpha
-* beta
-"#;
-    render_template(&BlogTemplate { motd: motd()?, markdown: ferromark::to_html(markdown_str) })
+    println!("path: {:?}", md_path);
+    if md_path.has_trailing_sep() {
+        md_path.push("index.md");
+    } else {
+        md_path.set_extension("md");
+    }
+
+    let md_file = tokio::fs::read_to_string(std::path::Path::new("./blog").join(md_path)).await.context_not_found("don't exist", "idk")?;
+    render_template(&BlogTemplate { motd: motd()?, markdown: ferromark::to_html(&md_file) })
+}
+
+async fn blog_render_index() -> HtmlTemplate {
+    blog_render(Path(PathBuf::from("index.md"))).await
 }
 
 #[tokio::main]
@@ -481,7 +495,9 @@ async fn main() -> Result<()> {
         .route("/robots.txt", get(robots))
         .route("/jail", get(jail))
         .route("/i/am/very/smart", get(idiot))
-        .route("/md", get(md_test))
+        .route("/blog/", get(blog_render_index))
+        .route("/blog", get(blog_render_index))
+        .route("/blog/{*md_path}", get(blog_render))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
         // Set no-cache due to many dyanmic things on all parts of the website
