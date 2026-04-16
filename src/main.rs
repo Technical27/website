@@ -3,8 +3,8 @@
 mod host;
 mod jail;
 
-use axum::extract::{Request, State, Path};
-use axum::response::Response;
+use axum::extract::{Path, Request, State};
+use axum::response::{IntoResponse, Response};
 use axum::{Extension, Router, response::Html, routing::get};
 
 use axum::Json;
@@ -25,7 +25,6 @@ use askama::Template;
 use rand::prelude::*;
 
 use anyhow::{Context, Result};
-use axum_anyhow::{ApiError, ApiResult, ResultExt};
 
 use tracing::{Level, error, trace, warn};
 use tracing_subscriber::FmtSubscriber;
@@ -339,24 +338,54 @@ const MOTD: &[&str] = &[
     "ISO = ASA/DIN",
 ];
 
-fn motd() -> ApiResult<&'static str> {
+fn motd() -> Result<&'static str, HtmlError> {
+    // match MOTD.iter().choose(&mut rand::rng()) {
+    //     Some(m) => Ok(m),
+    //     None => Err(HtmlError::Template),
+    // }
     match MOTD.iter().choose(&mut rand::rng()) {
         Some(m) => Ok(m),
-        None => Err(ApiError::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .title("Internal Server Error")
-            .detail("motd machine broke ask again tomorrow")
-            .build()),
+        None => Err(HtmlError::Internal),
     }
 }
 
-type HtmlTemplate = ApiResult<Html<String>>;
+enum HtmlError {
+    Template,
+    Internal,
+    File(std::io::Error),
+}
+
+impl IntoResponse for HtmlError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Internal => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("this one broke bad"),
+            )
+                .into_response(),
+            Self::Template => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("look idk how the rendering broke"),
+            )
+                .into_response(),
+            Self::File(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => {
+                    (StatusCode::NOT_FOUND, format!("can't find that boss")).into_response()
+                }
+                _ => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("look idk how the file broke"),
+                )
+                    .into_response(),
+            },
+        }
+    }
+}
+
+type HtmlTemplate = Result<Html<String>, HtmlError>;
 
 fn render_template(template: &impl Template) -> HtmlTemplate {
-    template
-        .render()
-        .context_internal("Internal Server Error", "Failed to work right idk")
-        .map(Html)
+    template.render().map(Html).map_err(|_| HtmlError::Template)
 }
 
 async fn root(src: Extension<IpAddr>) -> HtmlTemplate {
@@ -383,7 +412,7 @@ async fn art() -> HtmlTemplate {
     render_template(&ArtTemplate { title: motd()? })
 }
 
-async fn car() -> ApiResult<String> {
+async fn car() -> Result<String, HtmlError> {
     Ok(motd()?.to_owned() + "\nunder construction, just use the back button")
 }
 
@@ -451,7 +480,6 @@ async fn jail(state: State<Arc<AppState>>, req: Request) -> Response {
     .unwrap()
 }
 
-
 #[derive(Template)]
 #[template(path = "blog.html")]
 struct BlogTemplate<'a> {
@@ -462,7 +490,7 @@ struct BlogTemplate<'a> {
 async fn blog_render(Path(mut md_path): Path<std::path::PathBuf>) -> HtmlTemplate {
     // XXX: check if this actually could be possible
     if md_path.is_absolute() {
-                return Err(anyhow::anyhow!("error").into());
+        return Err(HtmlError::Internal);
     }
 
     println!("path: {:?}", md_path);
@@ -472,8 +500,14 @@ async fn blog_render(Path(mut md_path): Path<std::path::PathBuf>) -> HtmlTemplat
         md_path.set_extension("md");
     }
 
-    let md_file = tokio::fs::read_to_string(std::path::Path::new("./blog").join(md_path)).await.context_not_found("don't exist", "idk")?;
-    render_template(&BlogTemplate { motd: motd()?, markdown: ferromark::to_html(&md_file) })
+    let md_file = tokio::fs::read_to_string(std::path::Path::new("./blog").join(md_path))
+        .await
+        .map_err(HtmlError::File)?;
+
+    render_template(&BlogTemplate {
+        motd: motd()?,
+        markdown: ferromark::to_html(&md_file),
+    })
 }
 
 async fn blog_render_index() -> HtmlTemplate {
@@ -508,6 +542,7 @@ async fn main() -> Result<()> {
         .route("/blog/{*md_path}", get(blog_render))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
+        // hardcode these in for now to have a nice json response
         .route("/.well-known/matrix/client", get(matrix_client))
         .route("/.well-known/matrix/server", get(matrix_server))
         // Set no-cache due to many dyanmic things on all parts of the website
