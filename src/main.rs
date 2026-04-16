@@ -106,6 +106,12 @@ struct SmartTemplate<'a> {
     title: &'a str,
 }
 
+#[derive(Template)]
+#[template(path = "contact.html")]
+struct ContactTemplate<'a> {
+    title: &'a str,
+}
+
 // TODO: move this out of main
 const MOTD: &[&str] = &[
     // ASCII AAAA in hexadecimal
@@ -381,6 +387,10 @@ async fn car() -> ApiResult<String> {
     Ok(motd()?.to_owned() + "\nunder construction, just use the back button")
 }
 
+async fn contact() -> HtmlTemplate {
+    render_template(&ContactTemplate { title: motd()? })
+}
+
 // returns information about the matrix homeserver to any client
 async fn matrix_client() -> Json<Value> {
     Json(json!({ "m.homeserver": { "base_url": "https://matrix.aamaruvi.com" } }))
@@ -490,22 +500,23 @@ async fn main() -> Result<()> {
         .route("/about", get(about))
         .route("/art", get(art))
         .route("/car", get(car))
-        .route("/.well-known/matrix/client", get(matrix_client))
-        .route("/.well-known/matrix/server", get(matrix_server))
+        .route("/contact", get(contact))
         .route("/robots.txt", get(robots))
-        .route("/jail", get(jail))
         .route("/i/am/very/smart", get(idiot))
         .route("/blog/", get(blog_render_index))
         .route("/blog", get(blog_render_index))
         .route("/blog/{*md_path}", get(blog_render))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/.well-known", ServeDir::new(".well-known"))
+        .route("/.well-known/matrix/client", get(matrix_client))
+        .route("/.well-known/matrix/server", get(matrix_server))
         // Set no-cache due to many dyanmic things on all parts of the website
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,
             HeaderValue::from_static("no-cache"),
         ))
-        // Internally sets no-store when needed
+        // Both manual jail, and the layer internally set no-store
+        .route("/jail", get(jail))
         .layer(host::HostCheckLayer::new(state.clone(), config))
         .with_state(state);
 

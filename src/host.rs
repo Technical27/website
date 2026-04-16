@@ -116,7 +116,7 @@ where
         }
 
         // deny known plaintext files
-        if path.ends_with(".env") {
+        if path.ends_with(".env") || path.starts_with("/.env") {
             trace!("denying plaintext file {}", path);
             return ResponseFuture::new_deny_text();
         }
@@ -189,6 +189,7 @@ where
             && path != "/.well-known/discord"
             && path != "/robots.txt"
             && path != "/jail"
+            && path != "/contact"
             && path != "/i/am/very/smart"
         {
             info!("strange path request: {}", path);

@@ -65,8 +65,9 @@ impl Future for JailFuture {
                     );
                 }
 
-                // don't let the browser store any response to avoid weird behavior
-                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                // don't let the browser store any response to avoid weird behavior, hopefully im
+                // just putting all of these here in hopes it works
+                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store, no-cache, must-revalidate"));
                 // tell to display inline, hopefully fixes videos to properly play
                 headers.insert(
                     header::CONTENT_DISPOSITION,
