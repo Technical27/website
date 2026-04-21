@@ -82,9 +82,9 @@ impl AppState {
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct RootTemplate<'a> {
-    title: &'a str,
-    messages: &'a [&'a str],
+struct RootTemplate {
+    // title: &'a str,
+    // messages: &'a [&'a str],
 }
 
 #[derive(Template)]
@@ -399,8 +399,6 @@ async fn root(src: Extension<IpAddr>) -> HtmlTemplate {
     }
 
     render_template(&RootTemplate {
-        title: motd()?,
-        messages: &msgs,
     })
 }
 
