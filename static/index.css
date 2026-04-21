@@ -1,32 +1,31 @@
-      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 
-      h1 {
-        letter-spacing: 0;
-        padding: 2rem;
-        font-size: 4em;
-      }
-      h2 {
-        font-size: 2em;
-        padding: 0 2rem 1rem 2rem;
-        letter-spacing: 0;
-      }
-      #para {
-        font-size: 0.8em;
-        padding: 0.5rem 2rem;
-        white-space: nowrap;
-      }
-      #box {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        width: 100%;
-        color: #d6d8d6;
-        /* grid-template-columns: 1.2fr 1fr; */
-      }
-      #links {
-        font-size: 0.8em;
-        padding: 0.5rem 2rem;
-      }
+h1 {
+  letter-spacing: 0;
+  padding: 2rem;
+  font-size: 4em;
+}
+h2 {
+  font-size: 2em;
+  padding: 0 2rem 1rem 2rem;
+  letter-spacing: 0;
+}
+#para {
+  font-size: 0.8em;
+  padding: 0.5rem 2rem;
+  white-space: nowrap;
+}
+#box {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: 100%;
+  color: #d6d8d6;
+}
+#links {
+  font-size: 0.8em;
+  padding: 0.5rem 2rem;
+}
 
 html {
   box-sizing: border-box;
@@ -40,30 +39,54 @@ html {
   padding: 0;
 } 
 
-      ul {
-        list-style-type: none;
-      }
+ul {
+  list-style-type: none;
+}
 
 
-      body {
-        font-family: "JetBrains Mono", "Fira Code", Monaco, Consolas, "Ubuntu Mono", monospace;
-        /* background-color: #000000; 
-        /* color: #00ff00; */
-        /* color: #19d313; */
-        color: #db6f1c;
-        background-color: #1b1c1b;
-      }
+body {
+  font-family: "JetBrains Mono", "Fira Code", Monaco, Consolas, "Ubuntu Mono", monospace;
+  color: #db6f1c;
+  background-color: #1b1c1b;
+}
 
-      a {
-        color: #2781db;
-      }
+a {
+  color: #2781db;
+}
 
-      html, body {
-        height: 100%;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-      }
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@media (pointer: coarse) and (max-width: 800px) {
+  #links > li {
+    padding: 0.2rem;
+  }
+
+  #links {
+    font-size: 1em;
+  }
+}
+
+@media (min-width: 1100px) and (max-height: 800px) {
+  #para, #links {
+    font-size: 1em;
+    padding: 0.8rem 3rem;
+  }
+
+  h1 {
+    font-size: 4em;
+    padding: 3rem;
+  }
+
+  h2 {
+    font-size: 2em;
+    padding: 0 3rem 1.5rem 3rem;
+  }
+}
 
 @media (min-width: 800px) and (min-height: 800px) {
   #para, #links {
@@ -72,12 +95,12 @@ html {
   }
 
   h1 {
-        font-size: 8em;
-        padding: 4rem;
+    font-size: 8em;
+    padding: 4rem;
   }
 
   h2 {
-        font-size: 4em;
-        padding: 0 4rem 2rem 4rem;
+    font-size: 4em;
+    padding: 0 4rem 2rem 4rem;
   }
 }
