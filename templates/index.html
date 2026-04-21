@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>webtest</title>
+    <link rel="icon" type="image/png" href="/static/favicon-index.png">
+    <meta property="og:title" content="aamaruvi's website"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="https://aamaruvi.com/"/>
+    <!-- <meta property="og:image" content="https://aamaruvi.com/static/og-image.png"/> -->
+    <meta property="og:description" content="the cool we lost from the early internet in the modern day. also my personal website."/>
+    <title>aamaruvi's website: {{ title }}</title>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 
@@ -118,8 +124,6 @@ html {
       }
 
       const decText = (el, text, idx) => {
-        // if (idx > text.length) return;
-
         let b = [];
         for (let i = 0; i < text.length; i++) {
           if (text.charAt(i) == '\n') {

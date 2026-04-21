@@ -82,8 +82,8 @@ impl AppState {
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct RootTemplate {
-    // title: &'a str,
+struct RootTemplate<'a> {
+    title: &'a str,
     // messages: &'a [&'a str],
 }
 
@@ -399,6 +399,7 @@ async fn root(src: Extension<IpAddr>) -> HtmlTemplate {
     }
 
     render_template(&RootTemplate {
+        title: motd()?
     })
 }
 
@@ -491,7 +492,7 @@ async fn blog_render(Path(mut md_path): Path<std::path::PathBuf>) -> HtmlTemplat
         return Err(HtmlError::Internal);
     }
 
-    println!("path: {:?}", md_path);
+    // println!("path: {:?}", md_path);
     if md_path.has_trailing_sep() {
         md_path.push("index.md");
     } else {
