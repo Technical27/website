@@ -48,6 +48,10 @@ body {
   font-family: "JetBrains Mono", "Fira Code", Monaco, Consolas, "Ubuntu Mono", monospace;
   color: #db6f1c;
   background-color: #1b1c1b;
+  text-rendering: optimizeLegibility;
+  font-variant-ligatures: contextual;
+  -webkit-overflow-scrolling: touch;
+  -webkit-text-size-adjust: 100%;
 }
 
 a {
@@ -63,7 +67,7 @@ html, body {
 
 @media (pointer: coarse) and (max-width: 800px) {
   #links > li {
-    padding: 0.2rem;
+    padding: 0.2rem 0;
   }
 
   #links {
