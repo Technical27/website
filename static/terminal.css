@@ -2,9 +2,10 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 
 :root {
-  --background: #1a170f;
-  --foreground: #eceae5;
-  --accent: #d43232;
+  --background: #1b1c1b;
+  --foreground: #d6d8d6;
+  --accent: #db6f1c;
+  --hyperlink: #2781db;
   --radius: 0;
   --font-size: 1rem;
   --line-height: 1.54em;
@@ -12,6 +13,10 @@
 
 html {
   box-sizing: border-box;
+}
+
+h1, h2 {
+  color: var(--accent);
 }
 
 *,
@@ -73,7 +78,7 @@ table {
 }
 
 a {
-  color: var(--accent);
+  color: var(--hyperlink);
 }
 
 button {

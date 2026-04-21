@@ -3,98 +3,14 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/png" href="/static/favicon-index.png">
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/index.css">
     <meta property="og:title" content="aamaruvi's website"/>
     <meta property="og:type" content="website"/>
     <meta property="og:url" content="https://aamaruvi.com/"/>
     <!-- <meta property="og:image" content="https://aamaruvi.com/static/og-image.png"/> -->
     <meta property="og:description" content="the cool we lost from the early internet in the modern day. also my personal website."/>
     <title>aamaruvi's website: {{ title }}</title>
-    <style>
-      @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
-
-      h1 {
-        letter-spacing: 0;
-        padding: 2rem;
-        font-size: 4em;
-      }
-      h2 {
-        font-size: 2em;
-        padding: 0 2rem 1rem 2rem;
-        letter-spacing: 0;
-      }
-      #para {
-        font-size: 0.8em;
-        padding: 0.5rem 2rem;
-        white-space: nowrap;
-      }
-      #box {
-        display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        width: 100%;
-        color: #d6d8d6;
-        /* grid-template-columns: 1.2fr 1fr; */
-      }
-      #links {
-        font-size: 0.8em;
-        padding: 0.5rem 2rem;
-      }
-
-html {
-  box-sizing: border-box;
-}
-
-*,
-*:before,
-*:after {
-  box-sizing: inherit;
-  margin: 0;
-  padding: 0;
-} 
-
-      ul {
-        list-style-type: none;
-      }
-
-
-      body {
-        font-family: "JetBrains Mono", "Fira Code", Monaco, Consolas, "Ubuntu Mono", monospace;
-        /* background-color: #000000; 
-        /* color: #00ff00; */
-        /* color: #19d313; */
-        color: #db6f1c;
-        background-color: #1b1c1b;
-      }
-
-      a {
-        color: #2781db;
-      }
-
-      html, body {
-        height: 100%;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-      }
-
-@media (min-width: 800px) {
-  #para, #links {
-    font-size: 1.2em;
-    padding: 1rem 4rem;
-  }
-
-  h1 {
-        font-size: 8em;
-        padding: 4rem;
-  }
-
-  h2 {
-        font-size: 4em;
-        padding: 0 4rem 2rem 4rem;
-  }
-}
-    </style>
   </head>
   <body>
     <h1 id="title"></h1>
@@ -102,65 +18,13 @@ html {
     <div id="box">
       <p id="para"></p>
       <ul id="links">
-        <li>GOTO <a href="/about">/about</a></li>
-        <li>JMP <a href="/contact">/contact</a></li>
-        <li>window.location.href = <a href="/blog">/blog</a></li>
-        <li>wget <a href="/car">/car</a></li>
-        <li>curl <a href="/art">/art</a></li>
+        <li><span id="link1"></span> <a href="/about"></a></li>
+        <li><span id="link2"></span> <a href="/contact"></a></li>
+        <li><span id="link3"></span> <a href="/blog"></a></li>
+        <li><span id="link4"></span> <a href="/car"></a></li>
+        <li><span id="link5"></span> <a href="/art"></a></li>
       </ul>
     </div>
-    <script>
-      const headingText = "Aamaruvi";
-      const subheadingText = "hi. and welcome.";
-      const paraText = "i can't be here for too long.\nfind me elsewhere to truly know me.\nthis interface may change and reconfigure at only my will.\nthe hyperlinks are all i can give you right now.\nmore to come when i am able.";
-      
-      const h1 = document.getElementById("title");
-      const h2 = document.getElementById("subtitle");
-      const para = document.getElementById("para");
-
-      const genChar = () => {
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890*&^$#@!()'\"[]{}-_=+;;,.<>/?`~\\|";
-        return chars.charAt(Math.random() * chars.length);
-      }
-
-      const decText = (el, text, idx) => {
-        let b = [];
-        for (let i = 0; i < text.length; i++) {
-          if (text.charAt(i) == '\n') {
-            b.push('\n');
-          }
-          else if (i < idx) {
-            b.push(text.charAt(i));
-          } else {
-            b.push(genChar());
-          }
-        }
-
-        el.innerText = b.join('');
-      }
-
-      let dt = 1;
-      const decLoop = () => {
-        if (dt < paraText.length + 32) {
-          setTimeout(() => {
-            decText(h1, headingText, dt);
-            decText(h2, subheadingText, dt);
-            decText(para, paraText, dt);
-            if (dt > paraText.length / 2) {
-              dt += 32;
-            } else if (dt > subheadingText.length) {
-              dt += 16;
-            } else if (dt > headingText.length) {
-              dt += 8;
-            } else {
-              dt += 1;
-            }
-            decLoop();
-          }, 60);
-        }
-      }
-
-      decLoop();
-    </script>
+    <script src="/static/index.js"></script>
   </body>
 </html>
