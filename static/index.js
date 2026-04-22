@@ -11,10 +11,50 @@ const para = document.getElementById("para");
 const links = [["GOTO", document.getElementById("link1")], ["JMP", document.getElementById("link2")],
 ["window.location.href =", document.getElementById("link3")], ["wget", document.getElementById("link4")], ["curl", document.getElementById("link5")]];
 
+const list = document.getElementById("fun-list");
+const local = luxon.DateTime.now();
+
+// Indonesia and the Philippines both have distintive timezones, but for some stupid reason,
+// windows groups all the timezones for these regions with many others despite not being the same at all.
+// just because this is a really really stupid funny joke, just use UTC offsets since both places do not observe DST.
+
+// UTC+7
+if (local.offset === 420) {
+  messages.push("USER=bramble");
+  // UTC+8
+} else if (local.offset === 480) {
+  messages.push("USER=quote");
+  // Check if time is the same as New York, easiest way to account for DST differences
+} else {
+  const est = local.setZone("America/New_York");
+  if (est.offset === local.offset) {
+    if (est.isInDST) {
+      messages.push("TZ=EDT");
+    } else {
+      messages.push("TZ=EST");
+    }
+  }
+}
+
+// I am far too lazy to check every single Australia timezone, just hope this is good enough unless windows is stupid again
+if (local.zone.ianaName.startsWith("Australia")) {
+  messages.push("TZ+=AUS");
+}
+
+if (local.offset % 60 !== 0) {
+  messages.push("UTC=" + local.toFormat("ZZ"))
+}
+
+if (local.hour > 2 && local.hour < 6) {
+  messages.push("SLP");
+}
+
 const genChar = () => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890*&^$#@!()'\"[]{}-_=+;;,.<>/?`~\\|";
   return chars.charAt(Math.random() * chars.length);
 }
+
+list.innerText = 'STATUS: ' + messages.join(', ')
 
 const decText = (el, text, idx) => {
   let b = [];
@@ -49,7 +89,6 @@ const decLoop = () => {
         decText(el, text, dt);
       }
       for (const el of document.getElementsByTagName("a")) {
-        //el.innerText = el.getAttribute("href");
         decText(el, el.getAttribute("href"), dt);
       }
       if (dt > paraText.length / 2) {
@@ -71,11 +110,5 @@ const decLoop = () => {
 window.addEventListener("resize", () => {
   if (done) decText(para, paraText, dt);
 })
-
-/* setTimeout(() => {
-  for (const el of document.getElementsByTagName("a")) {
-    el.innerText = el.getAttribute("href");
-  }
-}, 60); */
 
 decLoop();

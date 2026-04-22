@@ -84,7 +84,7 @@ impl AppState {
 #[template(path = "index.html")]
 struct RootTemplate<'a> {
     title: &'a str,
-    // messages: &'a [&'a str],
+    messages: &'a [&'a str],
 }
 
 #[derive(Template)]
@@ -391,15 +391,18 @@ fn render_template(template: &impl Template) -> HtmlTemplate {
 async fn root(src: Extension<IpAddr>) -> HtmlTemplate {
     let mut msgs = Vec::new();
     if src.is_ipv6() {
-        msgs.push("you are connected over IPv6 and participating in the transition away from a fundamentally broken internet");
+        msgs.push("IPv6");
+    } else {
+        msgs.push("IPv4");
     }
 
     if rand::rng().random_ratio(1, 20) {
-        msgs.push("something is at /i/am/very/smart");
+        msgs.push("info at /i/am/very/smart");
     }
 
     render_template(&RootTemplate {
-        title: motd()?
+        title: motd()?,
+        messages: &msgs
     })
 }
 
